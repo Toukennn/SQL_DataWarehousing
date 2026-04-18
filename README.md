@@ -23,7 +23,7 @@ This project involves:
 3. **Data Modeling**: Developing fact and dimension tables optimized for analytical queries.
 4. **Analytics & Reporting**: Creating SQL-based reports and dashboards for actionable insights.
 
-🎯 The Skills used in the project:
+🎯 Skills demonstrated:
 - SQL Development
 - Data Architecture
 - Data Engineering  
@@ -113,5 +113,22 @@ data-warehouse-project/
    C:\SQL_DataWarehousing\datasets\
 
 ---
+
+## 📊 Sample Insights
+
+- Top 10 customers by revenue
+- Monthly sales trend analysis
+- Best performing product categories
+
+Example query:
+
+```sql
+SELECT TOP 10 customer_id, SUM(sales_amount) AS total_sales
+FROM gold.fact_sales
+GROUP BY customer_id
+ORDER BY total_sales DESC;
+```
+---
+
 ## 🛡️ License
 This project is licensed under the [MIT License](LICENSE). You are free to use, modify, and share this project with proper attribution.
