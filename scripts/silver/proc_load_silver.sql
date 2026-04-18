@@ -1,3 +1,23 @@
+/*
+===============================================================================
+Stored Procedure: Load Silver Layer (Bronze -> Silver)
+===============================================================================
+Script Purpose:
+    This stored procedure performs the ETL (Extract, Transform, Load) process to 
+    populate the 'silver' schema tables from the 'bronze' schema.
+	Actions Performed:
+		- Truncates Silver tables.
+		- Inserts transformed and cleansed data from Bronze into Silver tables.
+		
+Parameters:
+    None. 
+	  This stored procedure does not accept any parameters or return any values.
+
+Usage Example:
+    EXEC Silver.load_silver;
+===============================================================================
+*/
+
 CREATE OR ALTER PROCEDURE silver.load_silver AS 
 BEGIN 
 	DECLARE @start_time DATETIME, @end_time DATETIME, @batch_start_time DATETIME, @batch_end_time DATETIME;
@@ -28,10 +48,11 @@ BEGIN
 		SELECT 
 			cst_id, 
 			cst_key, 
-			TRIM(cst_firstname) AS cst_firstname, 
+			TRIM(cst_firstname) AS cst_firstname,  -- removing unwanted spaces 
 			TRIM(cst_lastname) AS cst_lastname, 
 			CASE 
-				WHEN UPPER(TRIM(cst_marital_status)) = 'S' THEN 'Single'
+				-- Making the variables more user-friendly
+				WHEN UPPER(TRIM(cst_marital_status)) = 'S' THEN 'Single'  
 				WHEN UPPER(TRIM(cst_marital_status)) = 'M' THEN 'Married'
 				ELSE 'n/a'
 			END AS cst_marital_status, 
@@ -42,12 +63,13 @@ BEGIN
 			END AS cst_gndr, 
 			cst_create_date
 		FROM (
+			-- Here we want to sort our data in order to have the latest version of them
 			SELECT *, 
 			ROW_NUMBER() OVER (PARTITION BY cst_id ORDER BY cst_create_date DESC) AS flag_last
 			FROM bronze.crm_cust_info 
 			WHERE cst_id IS NOT NULL
 		) t 
-		WHERE flag_last = 1; 
+		WHERE flag_last = 1; -- the latest version
 		SET @end_time = GETDATE();
 		PRINT '>> Load Duration: ' + CAST(DATEDIFF(SECOND, @start_time, @end_time) AS NVARCHAR) + ' seconds';
         PRINT '>> -------------';
@@ -69,7 +91,7 @@ BEGIN
 		SELECT 
 			prd_id, 
 			REPLACE(SUBSTRING(prd_key, 1, 5), '-', '_') AS cat_id, 
-			SUBSTRING(prd_key, 7, LEN(prd_key)) AS prd_key, 
+			SUBSTRING(prd_key, 7, LEN(prd_key)) AS prd_key, -- data polishing 
 			prd_nm, 
 			ISNULL(prd_cost, 0) AS prd_cost, 
 			CASE 
@@ -81,6 +103,9 @@ BEGIN
 			END AS prd_line,
 			CAST(prd_start_dt AS DATE) AS prd_start_dt, 
 			CAST (
+				-- the problem here was that the time intervals were overlapping and a good 
+				-- solution for this is to make the end time of a record, the start time of
+				-- its next reord minus one day so everything is coherent 
 				LEAD(prd_start_dt) OVER (PARTITION BY prd_key ORDER BY prd_start_dt) - 1
 				AS DATE
 			) AS prd_end_dt
@@ -110,6 +135,7 @@ BEGIN
 			sls_ord_num, 
 			sls_prd_key, 
 			sls_cust_id, 
+			-- Handling illogical cases
 			CASE 
 				WHEN sls_order_dt = 0 OR LEN(sls_order_dt) != 8 THEN NULL
 				ELSE CAST(CAST(sls_order_dt AS VARCHAR) AS DATE)
@@ -150,6 +176,7 @@ BEGIN
 			gen
 		)
 		SELECT 
+			-- Again handling illogical cases
 			CASE 
 				WHEN cid LIKE 'NAS%' THEN SUBSTRING(cid, 4, LEN(cid)) 
 				ELSE cid
@@ -185,6 +212,7 @@ BEGIN
 		)
 		SELECT
 			REPLACE(cid, '-', '') AS cid, 
+			-- making the country names friendlier and more uniform
 			CASE
 				WHEN TRIM(cntry) = 'DE' THEN 'Germany'
 				WHEN TRIM(cntry) IN ('US', 'USA') THEN 'United States'
