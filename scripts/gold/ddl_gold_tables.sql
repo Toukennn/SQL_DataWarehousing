@@ -1,3 +1,43 @@
+/*
+===============================================================================
+Script: Create Gold Layer Tables and Load Business-Ready Data
+===============================================================================
+Script Purpose:
+    This script builds the Gold layer of the data warehouse by creating and 
+    populating dimension and fact tables.
+
+    The script performs the following actions:
+    - Drops existing Gold tables if they already exist.
+    - Creates dimension tables for customers and products.
+    - Creates a fact table for sales transactions.
+    - Loads transformed and business-ready data from the Silver layer.
+    - Creates indexes to improve query performance on key columns.
+
+Tables Created:
+    - gold.dim_customers
+    - gold.dim_products
+    - gold.fact_sales
+
+Usage Notes:
+    - Run this script after the Silver layer has been successfully loaded.
+    - This script is intended for table-based Gold layer implementation.
+===============================================================================
+*/
+
+
+/*
+===============================================================================
+Create Dimension Table: gold.dim_customers
+===============================================================================
+Purpose:
+    Stores customer-related descriptive attributes used for reporting and 
+    analytical queries.
+
+Notes:
+    - customer_key is a surrogate key generated in the Gold layer.
+    - Data is sourced from CRM and ERP customer/location tables in the Silver layer.
+===============================================================================
+*/
 IF OBJECT_ID('gold.dim_customers', 'U') IS NOT NULL
     DROP TABLE gold.dim_customers;
 GO
@@ -44,11 +84,24 @@ SELECT
 FROM silver.crm_cust_info ci
 LEFT JOIN silver.erp_cust_az12 ca
     ON ci.cst_key = ca.cid
-LEFT JOIN silver.erp_loc_a101 la
-    ON ci.cst_key = la.cid;
+LEFT JOIN silver.erp_loc_a101 la -- Loading customer data by combining information from
+    ON ci.cst_key = la.cid;      -- CRM and ERP sources
 GO
 
 
+/*
+===============================================================================
+Create Dimension Table: gold.dim_products
+===============================================================================
+Purpose:
+    Stores product-related descriptive attributes used for reporting and 
+    analytical queries.
+
+Notes:
+    - product_key is a surrogate key generated in the Gold layer.
+    - Only current/active products are loaded into this dimension.
+===============================================================================
+*/
 IF OBJECT_ID('gold.dim_products', 'U') IS NOT NULL
     DROP TABLE gold.dim_products;
 GO
@@ -95,10 +148,22 @@ SELECT
 FROM silver.crm_prd_info pn
 LEFT JOIN silver.erp_px_cat_g1v2 pc
     ON pn.cat_id = pc.id
-WHERE pn.prd_end_dt IS NULL;
+WHERE pn.prd_end_dt IS NULL; -- not ended
 GO
 
 
+/*
+===============================================================================
+Create Fact Table: gold.fact_sales
+===============================================================================
+Purpose:
+    Stores transactional sales data for analytical reporting.
+
+Notes:
+    - Links to customer and product dimensions through surrogate keys.
+    - Contains measures such as sales amount, quantity, and price.
+===============================================================================
+*/
 IF OBJECT_ID('gold.fact_sales', 'U') IS NOT NULL
     DROP TABLE gold.fact_sales;
 GO
@@ -144,16 +209,76 @@ LEFT JOIN gold.dim_products pr
 LEFT JOIN gold.dim_customers cu
     ON sd.sls_cust_id = cu.customer_id;
 GO
+-- NOTE that LEFT JOINs are used in this script so that unmatched  
+-- records can still be loaded for review
 
 
-CREATE INDEX IX_dim_customers_customer_id
-ON gold.dim_customers(customer_id);
+/*
+===============================================================================
+Create Indexes for Performance Optimization
+===============================================================================
+Purpose:
+    Creates indexes on key lookup, join, and filtering columns to improve query
+    performance in the Gold layer.
+===============================================================================
+*/
 
-CREATE INDEX IX_dim_products_product_number
-ON gold.dim_products(product_number);
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IX_dim_customers_customer_id'
+      AND object_id = OBJECT_ID('gold.dim_customers')
+)
+BEGIN
+    CREATE INDEX IX_dim_customers_customer_id
+    ON gold.dim_customers(customer_id);
+END;
+GO
 
-CREATE INDEX IX_fact_sales_customer_key
-ON gold.fact_sales(customer_key);
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IX_dim_products_product_number'
+      AND object_id = OBJECT_ID('gold.dim_products')
+)
+BEGIN
+    CREATE INDEX IX_dim_products_product_number
+    ON gold.dim_products(product_number);
+END;
+GO
 
-CREATE INDEX IX_fact_sales_product_key
-ON gold.fact_sales(product_key);
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IX_fact_sales_customer_key'
+      AND object_id = OBJECT_ID('gold.fact_sales')
+)
+BEGIN
+    CREATE INDEX IX_fact_sales_customer_key
+    ON gold.fact_sales(customer_key);
+END;
+GO
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IX_fact_sales_product_key'
+      AND object_id = OBJECT_ID('gold.fact_sales')
+)
+BEGIN
+    CREATE INDEX IX_fact_sales_product_key
+    ON gold.fact_sales(product_key);
+END;
+GO
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IX_fact_sales_order_date'
+      AND object_id = OBJECT_ID('gold.fact_sales')
+)
+BEGIN
+    CREATE INDEX IX_fact_sales_order_date
+    ON gold.fact_sales(order_date);
+END;
+GO
