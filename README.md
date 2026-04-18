@@ -95,6 +95,23 @@ data-warehouse-project/
 ```
 ---
 
-## 🛡️ License
+## ⚙️ How to Run the Project
 
+1. Clone the repository
+2. Open SQL Server Management Studio (SSMS)
+3. Run scripts in the following order:
+
+   - scripts/init_database.sql
+   - scripts/bronze/proc_load_bronze.sql
+   - scripts/silver/proc_load_silver.sql
+   - scripts/gold/ddl_gold_tables.sql
+
+4. Before running Bronze layer:
+   Update the `@base_path` variable in `proc_load_bronze.sql`:
+
+   Example:
+   C:\SQL_DataWarehousing\datasets\
+
+---
+## 🛡️ License
 This project is licensed under the [MIT License](LICENSE). You are free to use, modify, and share this project with proper attribution.
